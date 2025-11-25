@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Big Woods Cam Tracker</title>
+    
+    <!-- PWA MANIFEST & ICONS -->
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <meta name="theme-color" content="#1a2f1a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        forest: '#1a2f1a',
+                        leaf: '#2e4a2e',
+                        dirt: '#3e3528',
+                        mud: '#5c4d3c',
+                        sand: '#dccbb6',
+                        clay: '#a85b38',
+                        alert: '#cc4433'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #1a2f1a; color: #dccbb6; }
+        ::-webkit-scrollbar { width: 0px; background: transparent; }
+        .card-shadow { box-shadow: 0 2px 4px rgba(0,0,0,0.4); }
+        /* Tighter inputs for small cards */
+        input::placeholder, textarea::placeholder { opacity: 0.5; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const App = () => {
+            const savedCameras = JSON.parse(localStorage.getItem('bigWoodsCameras')) || [];
+            const [cameras, setCameras] = useState(savedCameras);
+            const [newName, setNewName] = useState('');
+            const [newLocation, setNewLocation] = useState('');
+            
+            useEffect(() => {
+                localStorage.setItem('bigWoodsCameras', JSON.stringify(cameras));
+            }, [cameras]);
+
+            const addCamera = () => {
+                if (!newName.trim()) return;
+                const newCam = {
+                    id: Date.now(),
+                    name: newName,
+                    location: newLocation,
+                    status: newLocation ? 'active' : 'pulled',
+                    lastBattery: new Date().toISOString().split('T')[0],
+                    notes: ''
+                };
+                setCameras([...cameras, newCam]);
+                setNewName('');
+                setNewLocation('');
+            };
+
+            const toggleStatus = (id) => {
+                setCameras(cameras.map(cam => {
+                    if (cam.id === id) {
+                        const newStatus = cam.status === 'active' ? 'pulled' : 'active';
+                        return {
+                            ...cam,
+                            status: newStatus,
+                            location: newStatus === 'pulled' ? '' : 'Enter Location'
+                        };
+                    }
+                    return cam;
+                }));
+            };
+
+            const updateField = (id, field, value) => {
+                setCameras(cameras.map(cam => (cam.id === id ? { ...cam, [field]: value } : cam)));
+            };
+
+            const deleteCamera = (id) => {
+                if(confirm('Delete camera?')) {
+                    setCameras(cameras.filter(cam => cam.id !== id));
+                }
+            };
+
+            const activeCameras = cameras.filter(c => c.status === 'active');
+            const pulledCameras = cameras.filter(c => c.status === 'pulled');
+
+            return (
+                <div className="max-w-lg mx-auto min-h-screen flex flex-col pb-32">
+                    {/* Compact Header */}
+                    <header className="bg-dirt p-3 sticky top-0 z-50 border-b-2 border-mud shadow-lg flex justify-between items-center">
+                        <h1 className="text-lg font-bold tracking-wider text-sand uppercase">
+                            <i className="fa-solid fa-tree mr-2"></i> Big Woods
+                        </h1>
+                        <div className="text-xs font-bold space-x-3 text-sand/70">
+                            <span><i className="fa-solid fa-circle text-green-600"></i> {activeCameras.length}</span>
+                            <span><i className="fa-solid fa-circle text-gray-500"></i> {pulledCameras.length}</span>
+                        </div>
+                    </header>
+
+                    <div className="p-3 space-y-4 flex-grow">
+                        
+                        {/* ACTIVE GRID */}
+                        {activeCameras.length > 0 && (
+                            <div>
+                                <h2 className="text-sand/50 text-xs font-bold uppercase mb-2">Deployed</h2>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {activeCameras.map(cam => (
+                                        <CameraCard 
+                                            key={cam.id} 
+                                            camera={cam} 
+                                            onToggle={() => toggleStatus(cam.id)}
+                                            onUpdate={updateField}
+                                            onDelete={() => deleteCamera(cam.id)}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* PULLED GRID */}
+                        {pulledCameras.length > 0 && (
+                            <div>
+                                <h2 className="text-sand/50 text-xs font-bold uppercase mb-2 mt-2">Storage</h2>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {pulledCameras.map(cam => (
+                                        <CameraCard 
+                                            key={cam.id} 
+                                            camera={cam} 
+                                            onToggle={() => toggleStatus(cam.id)}
+                                            onUpdate={updateField}
+                                            onDelete={() => deleteCamera(cam.id)}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        
+                        {cameras.length === 0 && (
+                            <div className="text-center py-20 opacity-30">
+                                <i className="fa-solid fa-camera text-4xl mb-2"></i>
+                                <p className="text-sm">List is empty.</p>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* ADD NEW FOOTER - Stays full width for ease of typing */}
+                    <div className="fixed bottom-0 w-full max-w-lg bg-dirt border-t-2 border-mud p-3 pb-6 shadow-[0_-4px_10px_rgba(0,0,0,0.5)]">
+                        <div className="flex gap-2 mb-2">
+                            <input 
+                                type="text" 
+                                placeholder="Name" 
+                                value={newName}
+                                onChange={(e) => setNewName(e.target.value)}
+                                className="bg-forest text-sand border border-mud p-2 rounded w-1/2 focus:outline-none focus:border-sand text-sm"
+                            />
+                            <input 
+                                type="text" 
+                                placeholder="Location (Opt)" 
+                                value={newLocation}
+                                onChange={(e) => setNewLocation(e.target.value)}
+                                className="bg-forest text-sand border border-mud p-2 rounded w-1/2 focus:outline-none focus:border-sand text-sm"
+                            />
+                        </div>
+                        <button 
+                            onClick={addCamera}
+                            className="w-full bg-leaf hover:bg-green-700 text-sand font-bold py-2 rounded border border-mud uppercase tracking-widest text-sm"
+                        >
+                            <i className="fa-solid fa-plus mr-1"></i> Add
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+        const CameraCard = ({ camera, onToggle, onUpdate, onDelete }) => {
+            const isPulled = camera.status === 'pulled';
+
+            return (
+                <div className={`rounded md:rounded-lg p-2 card-shadow border-t-4 relative flex flex-col justify-between h-full ${isPulled ? 'bg-dirt border-gray-500 opacity-75' : 'bg-mud border-green-600'}`}>
+                    
+                    {/* Delete X */}
+                    <button onClick={onDelete} className="absolute top-1 right-2 text-sand/30 hover:text-alert z-10">
+                        <i className="fa-solid fa-xmark text-sm"></i>
+                    </button>
+
+                    <div>
+                        {/* NAME */}
+                        <input 
+                            value={camera.name}
+                            onChange={(e) => onUpdate(camera.id, 'name', e.target.value)}
+                            className="bg-transparent text-base font-bold text-sand w-[85%] focus:outline-none focus:bg-black/20 rounded px-1 -ml-1 truncate"
+                            placeholder="Name"
+                        />
+                        
+                        {/* LOCATION */}
+                        <div className="flex items-start mt-1 text-xs">
+                            <i className={`fa-solid fa-location-arrow mt-1 mr-1 ${isPulled ? 'text-gray-500' : 'text-green-400'}`}></i>
+                            {isPulled ? (
+                                <span className="text-sand/40 italic py-0.5">Stored</span>
+                            ) : (
+                                <textarea 
+                                    value={camera.location}
+                                    onChange={(e) => onUpdate(camera.id, 'location', e.target.value)}
+                                    className="bg-transparent w-full text-sand/90 focus:outline-none focus:bg-black/20 rounded resize-none overflow-hidden h-9 leading-tight"
+                                    placeholder="Loc..."
+                                />
+                            )}
+                        </div>
+                    </div>
+
+                    {/* STATS AREA */}
+                    <div className="bg-forest/40 rounded p-1.5 mt-2 space-y-1">
+                        {/* Battery */}
+                        <div className="flex items-center justify-between text-[10px] text-sand/60">
+                            <i className="fa-solid fa-bolt"></i>
+                            <input 
+                                type="date" 
+                                value={camera.lastBattery}
+                                onChange={(e) => onUpdate(camera.id, 'lastBattery', e.target.value)}
+                                className="bg-transparent text-sand text-right focus:outline-none w-20 p-0 m-0"
+                            />
+                        </div>
+                        
+                        {/* Notes */}
+                        <textarea 
+                            value={camera.notes}
+                            onChange={(e) => onUpdate(camera.id, 'notes', e.target.value)}
+                            placeholder="Notes..."
+                            className="w-full bg-transparent text-sand/80 text-[11px] focus:outline-none resize-none h-8 leading-tight border-t border-white/5 pt-1"
+                        ></textarea>
+                    </div>
+
+                    {/* Action Button */}
+                    <button 
+                        onClick={onToggle}
+                        className={`w-full mt-2 text-[10px] font-bold uppercase py-1.5 rounded transition-colors ${isPulled ? 'bg-leaf text-sand border border-green-800' : 'bg-dirt text-sand/50 border border-mud'}`}
+                    >
+                        {isPulled ? 'Deploy' : 'Pull'}
+                    </button>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+    
+    <!-- PWA SERVICE WORKER REGISTRATION -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('./sw.js')
+            .then((reg) => console.log('Service Worker Registered!', reg.scope))
+            .catch((err) => console.log('Service Worker registration failed: ', err));
+        });
+      }
+    </script>
+</body>
+</html>
